@@ -8,7 +8,7 @@
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #===================================#
-# Update script for BuildTools v1.3 #
+# Update script for BuildTools v1.4 #
 #===================================#
 
 # Version of spigot generate https://www.spigotmc.org/wiki/buildtools/#versions
@@ -28,33 +28,32 @@ MAVEN_OPTS="-Xmx2G -Xms1G -XX:+UseG1GC"
 BT_NAME="BuildTools"
 BT_JAR_FILE="${BT_NAME}.jar"
 BT_NUM_FILE="${BT_NAME}.number"
-LOCAL_NUMBER=0
+BT_LOCAL_NUMBER=0
 if [ -f "${BT_NUM_FILE}" ]; then
-	LOCAL_NUMBER=$(cat "${BT_NUM_FILE}")
+	BT_LOCAL_NUMBER=$(cat "${BT_NUM_FILE}")
 fi
-CURRENT_NUMBER=1
-CURRENT_NUMBER=$(curl --silent "https://hub.spigotmc.org/jenkins/job/BuildTools/lastStableBuild/buildNumber")
-SG_REPO="craftbukkit"
-LOCAL_CID_FILE="${SG_REPO}.commitid"
+BT_LAST_NUMBER=1
+BT_LAST_NUMBER=$(curl --silent "https://hub.spigotmc.org/jenkins/job/BuildTools/lastStableBuild/buildNumber")
+SG_LOCAL_NUMBER_FILE="spigot.number"
 
 function event_log {
-	local PID=${2:-$$}
-	logger --id $PID --tag update-bt "${1}"
+	local PSID=${2:-$$}
+	logger --id $PSID --tag update-bt "${1}"
 	return $?
 }
 
-event_log "Run it [LOCAL_NUMBER = ${LOCAL_NUMBER}, CURRENT_NUMBER = ${CURRENT_NUMBER}]"
+event_log "Run it [BT_LOCAL_NUMBER = ${BT_LOCAL_NUMBER}, BT_LAST_NUMBER = ${BT_LAST_NUMBER}]"
 
-if [ $LOCAL_NUMBER -lt $CURRENT_NUMBER ]; then
+if [ $BT_LOCAL_NUMBER -lt $BT_LAST_NUMBER ]; then
 	event_log "Need to update BuildTools"
 	if [ -f "${BT_JAR_FILE}" ]; then
 		mv --verbose "${BT_JAR_FILE}" "${BT_JAR_FILE}.old"
 	fi
 	curl -o "${BT_JAR_FILE}" "https://hub.spigotmc.org/jenkins/job/BuildTools/lastStableBuild/artifact/target/BuildTools.jar" &
-	PID=$!
-	wait $PID
-	event_log "Finish update BuildTools. Status: $?" $PID
-	echo $CURRENT_NUMBER > "${BT_NUM_FILE}"
+	PSID=$!
+	wait $PSID
+	event_log "Finish update BuildTools. Status: $?" $PSID
+	echo $BT_LAST_NUMBER > "${BT_NUM_FILE}"
 fi
 
 RUN_BUILDTOOLS=$START_BUILDTOOLS
@@ -63,27 +62,27 @@ if [ "$1" = "force" ]; then
 	RUN_BUILDTOOLS=2
 fi
 
-LOCAL_CID="0a"
-if [ -f "$LOCAL_CID_FILE" ]; then
-    LOCAL_CID=$(cat "${LOCAL_CID_FILE}")
+SG_LOCAL_NUMBER=0
+if [ -f "$SG_LOCAL_NUMBER_FILE" ]; then
+    SG_LOCAL_NUMBER=$(cat "${SG_LOCAL_NUMBER_FILE}")
 fi
 
-LAST_CID="0b"
+SG_LAST_NUMBER=1
 if [ $RUN_BUILDTOOLS -gt 0 ]; then
-    LAST_CID=$(curl --silent "https://hub.spigotmc.org/stash/rest/api/1.0/projects/SPIGOT/repos/${SG_REPO}/commits?limit=1" | jq -r '.values[0].id')
+    SG_LAST_NUMBER=$(curl --silent "https://hub.spigotmc.org/versions/${REV}.json" | jq -r '.name')
 fi
 
-if [ $RUN_BUILDTOOLS -eq 1 -a "$LOCAL_CID" = "$LAST_CID" ]; then
+if [ $RUN_BUILDTOOLS -eq 1 -a $SG_LOCAL_NUMBER -eq $SG_LAST_NUMBER ]; then
     RUN_BUILDTOOLS=0
 fi
 
 if [ $RUN_BUILDTOOLS -gt 0 ]; then
 	event_log "Run BuildTools!"
 	java -d64 ${MAVEN_OPTS} -jar "${BT_JAR_FILE}" --rev ${REV} &
-	PID=$!
-	wait $PID
-	event_log "Finish build. Status: $?" $PID
-	echo $LAST_CID > "${LOCAL_CID_FILE}"
+	PSID=$!
+	wait $PSID
+	event_log "Finish build. Status: $?" $PSID
+	echo $SG_LAST_NUMBER > "${SG_LOCAL_NUMBER_FILE}"
 
 	if [ -x "${EXTEND_SCRIPT}" ]; then
 		source "${EXTEND_SCRIPT}"
